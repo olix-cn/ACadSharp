@@ -1,6 +1,7 @@
 ﻿using ACadSharp.Attributes;
 using ACadSharp.Tables;
 using CSMath;
+using CSMath.Extensions;
 using CSUtilities.Extensions;
 using System;
 using System.Collections.Generic;
@@ -84,14 +85,7 @@ public class TextEntity : Entity, IText
 				throw new ArgumentNullException(nameof(value));
 			}
 
-			if (this.Document != null)
-			{
-				this._style = CadObject.updateCollection(value, this.Document.TextStyles);
-			}
-			else
-			{
-				this._style = value;
-			}
+			this._style = this.updateTableEntry(value, s => this._style = s, this.Document?.TextStyles);
 		}
 	}
 
@@ -263,7 +257,7 @@ public class TextEntity : Entity, IText
 
 		// the height must be greater than zero, the cos is always positive between -85 and 85
 		double newHeight = newVvector.GetLength() * Math.Cos(newObliqueAngle);
-		newHeight = MathHelper.IsZero(newHeight) ? MathHelper.Epsilon : newHeight;
+		newHeight = newHeight.IsZero() ? MathHelper.Epsilon : newHeight;
 
 		// the width factor is defined between 0.01 and 100
 		double newWidthFactor = newUvector.GetLength() / newHeight;
@@ -288,7 +282,7 @@ public class TextEntity : Entity, IText
 	public override CadObject Clone()
 	{
 		TextEntity clone = (TextEntity)base.Clone();
-		clone.Style = (TextStyle)this.Style.Clone();
+		clone._style = (TextStyle)this.Style.Clone();
 		return clone;
 	}
 
@@ -302,27 +296,15 @@ public class TextEntity : Entity, IText
 	{
 		base.AssignDocument(doc);
 
-		this._style = CadObject.updateCollection(this.Style, doc.TextStyles);
-
-		doc.DimensionStyles.OnRemove += this.tableOnRemove;
+		this.updateTableEntry(this._style, s => this._style = s, doc.TextStyles);
 	}
 
 	internal override void UnassignDocument()
 	{
-		this.Document.DimensionStyles.OnRemove -= this.tableOnRemove;
+		this.Document.TextStyles.RemoveReference(this.Style.Name, this);
 
 		base.UnassignDocument();
 
-		this.Style = (TextStyle)this.Style.Clone();
-	}
-
-	protected override void tableOnRemove(object sender, CollectionChangedEventArgs e)
-	{
-		base.tableOnRemove(sender, e);
-
-		if (e.Item.Equals(this.Style))
-		{
-			this.Style = this.Document.TextStyles[TextStyle.DefaultName];
-		}
+		this._style = (TextStyle)this.Style?.Clone();
 	}
 }
